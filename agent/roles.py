@@ -1,6 +1,5 @@
 from .llm import call_llm
 
-
 # -----------------------------
 # Planner (structured steps)
 # -----------------------------
@@ -15,7 +14,6 @@ def planner(task):
         user=task,
         temperature=0.4
     )
-
 
 # -----------------------------
 # Coder (strict implementation)
@@ -32,7 +30,6 @@ def coder(step, context=""):
         temperature=0.1
     )
 
-
 # -----------------------------
 # Reviewer (structured decision)
 # -----------------------------
@@ -44,12 +41,11 @@ def reviewer(code):
             "Return ONLY one line in this format:\n"
             "APPROVED\n"
             "or\n"
-            "REJECTED: <reason>"
+            "REJECTED: "
         ),
         user=code,
         temperature=0.0
     )
-
 
 # -----------------------------
 # Test generator (strict pytest output)
@@ -65,6 +61,8 @@ def tester(code):
         temperature=0.2
     )
 
+# Alias for core.py import
+generate_tests = tester
 
 # -----------------------------
 # Fixer (patch-style behavior)

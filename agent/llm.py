@@ -1,59 +1,32 @@
-from pathlib import Path
 import yaml
-import time
+from pathlib import Path
 from openai import OpenAI
 
-
-# -----------------------------
-# Load config safely
-# -----------------------------
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.yaml"
 
 with open(CONFIG_PATH, "r") as f:
     CONFIG = yaml.safe_load(f)
 
-
+# Initialize OpenAI client with local base URL
 client = OpenAI(
-    base_url=CONFIG["base_url"],
-    api_key=CONFIG.get("api_key", "lm-studio")
+    api_key=CONFIG.get("api_key", "sk-not-needed-for-local"),
+    base_url=CONFIG.get("base_url", "http://localhost:1234/v1")
 )
 
-
-# -----------------------------
-# Core LLM call with retries
-# -----------------------------
-def call_llm(system, user, temperature=0.2, max_retries=2):
-    last_error = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            resp = client.chat.completions.create(
-                model=CONFIG["model"],
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user}
-                ],
-                temperature=temperature,
-                timeout=CONFIG.get("timeout", 60)
-            )
-
-            # Validate response
-            if not resp or not resp.choices:
-                raise ValueError("Empty response from model")
-
-            content = resp.choices[0].message.content
-
-            if content is None or not isinstance(content, str):
-                raise ValueError("Invalid model output")
-
-            return content.strip()
-
-        except Exception as e:
-            last_error = e
-            print(f"[LLM ERROR] attempt {attempt+1}/{max_retries+1}: {e}")
-
-            # Backoff before retry
-            time.sleep(1.5 * (attempt + 1))
-
-    # Final failure fallback
-    raise RuntimeError(f"LLM call failed after retries: {last_error}")
+def call_llm(system: str, user: str, temperature: float = 0.1):
+    """
+    Calls the LLM API.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=CONFIG.get("model", "local-model"),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=temperature,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"[LLM ERROR] Failed to call LLM: {e}")
+        return None
