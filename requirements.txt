@@ -1,0 +1,7 @@
+openai
+typer
+rich
+pytest
+coverage
+pydantic
+pyyaml

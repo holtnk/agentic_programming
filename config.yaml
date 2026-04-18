@@ -1,0 +1,12 @@
+model: local-model
+base_url: http://localhost:1234/v1
+
+safety:
+  allow_network: false
+  max_file_size_kb: 500
+  allowed_paths:
+    - ./workspace
+
+testing:
+  coverage_threshold: 0.85
+  max_iterations: 5
