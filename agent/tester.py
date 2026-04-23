@@ -2,7 +2,6 @@ import subprocess
 import os
 import tempfile
 import uuid
-from .roles import tester as generate_tests_logic
 
 DOCKER_ = "python:3.11-slim"
 
@@ -27,13 +26,15 @@ def run_tests():
     workspace_path = os.path.abspath("workspace")
     
     try:
+        os.makedirs(workspace_path, exist_ok=True)
         cmd = [
             "docker", "run", "--rm", "--name", container_name,
             # Mount workspace as read-write (rw) so pytest can create .pytest_cache
             "-v", f"{workspace_path}:/app/workspace:rw",
-            "-w", "/app",
+            "-w", "/app/workspace",
             DOCKER_,
-            "bash", "-c", "pip install pytest >/dev/null 2>&1 && pytest workspace --maxfail=1 --disable-warnings -q"
+            "bash", "-lc",
+            "pip install pytest >/dev/null 2>&1 && PYTHONPATH=. pytest . --maxfail=1 --disable-warnings -q"
         ]
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=15

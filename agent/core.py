@@ -1,15 +1,76 @@
+import subprocess
 from pathlib import Path
-import yaml
+
 from .roles import planner, coder, reviewer, fixer, tester
-from .tester import generate_tests, write_test_file, run_tests, write_code_to_workspace
+from .sandbox import ensure_docker, run_code_safely
+from .tester import write_test_file, run_tests, write_code_to_workspace
 from .safety import validate_code
+from .utils import load_config
 
 # -----------------------------
 # Load config safely
 # -----------------------------
-CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.yaml"
-with open(CONFIG_PATH, "r") as f:
-    CONFIG = yaml.safe_load(f)
+CONFIG = load_config()
+
+CONDA_ENV_PATH = Path("/home/holtnk/miniconda3/envs/agent_env")
+CONDA_ENV_NAME = "agent_env"
+CONDA_INIT_SCRIPT = Path("/home/holtnk/miniconda3/etc/profile.d/conda.sh")
+
+# -----------------------------
+# Conda environment validation
+# -----------------------------
+
+def ensure_conda_env() -> None:
+    print("[CONDA] Checking conda environment...")
+
+    if not CONDA_ENV_PATH.exists():
+        raise RuntimeError(
+            f"Required conda environment not found at {CONDA_ENV_PATH}"
+        )
+
+    if not CONDA_INIT_SCRIPT.exists():
+        raise RuntimeError(
+            f"Conda init script not found at {CONDA_INIT_SCRIPT}"
+        )
+
+    cmd = (
+        f"source {CONDA_INIT_SCRIPT} && "
+        f"conda activate {CONDA_ENV_NAME} && "
+        "python -c \"import sys; print(sys.executable)\""
+    )
+
+    result = subprocess.run(
+        ["bash", "-lc", cmd],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Conda environment activation failed: "
+            + (result.stderr or result.stdout or "unknown error")
+        )
+
+    executable = result.stdout.strip()
+    print(f"[CONDA] Activated {CONDA_ENV_NAME} at {executable}")
+
+# -----------------------------
+# Sandbox initialization
+# -----------------------------
+
+def initialize_sandbox() -> None:
+    print("[SANDBOX] Initializing sandbox environment...")
+    ensure_docker()
+
+    result = run_code_safely("print('sandbox ready')\n")
+    if result.get("returncode") != 0:
+        raise RuntimeError(
+            "Sandbox initialization failed: "
+            + (result.get("stderr") or result.get("stdout") or "unknown error")
+        )
+
+    print("[SANDBOX] Sandbox is ready.")
 
 # -----------------------------
 # State container
@@ -28,7 +89,10 @@ def init_state(task: str):
 # -----------------------------
 def safe_call(fn, *args, fallback=None):
     try:
-        return fn(*args)
+        result = fn(*args)
+        if result is None or (isinstance(result, str) and not result.strip()):
+            return fallback
+        return result
     except Exception as e:
         print(f"[ERROR] {fn.__name__} failed:", e)
         return fallback
@@ -47,11 +111,15 @@ def update_context(context: str, new_code: str, max_chars: int = 12000):
 # -----------------------------
 def run_agent(task: str):
     state = init_state(task)
+    ensure_conda_env()
+
     print("🧠 Planning...")
     plan = safe_call(planner, task, fallback="")
     if not plan:
         print("[ERROR] Planner returned empty plan.")
         return ""
+
+    initialize_sandbox()
 
     # Normalize plan into steps
     state["plan"] = [
